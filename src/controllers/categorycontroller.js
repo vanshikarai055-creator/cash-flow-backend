@@ -1,14 +1,21 @@
+
+const mongoose = require("mongoose");
 const Category = require("../models/category.model");
 
-const createCategory = async (req, res) => {
+// CREATE CATEGORY
+const createCategory = async (req, res, next) => {
     try {
         const { name, type } = req.body;
 
         // 1. Validate required fields
-        if (!name || !type) {
+        if (
+            typeof name !== "string" ||
+            name.trim() === "" ||
+            type === undefined
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Name and type are required"
+                message: "A valid name and type are required"
             });
         }
 
@@ -20,15 +27,17 @@ const createCategory = async (req, res) => {
             });
         }
 
-        // 3. Check if category already exists for this user
+        const normalizedName = name.trim();
+
+        // 3. Check duplicate category for this user
         const existingCategory = await Category.findOne({
             userId: req.user.userId,
-            name: name.trim(),
+            name: normalizedName,
             type
         });
 
         if (existingCategory) {
-            return res.status(400).json({
+            return res.status(409).json({
                 success: false,
                 message: "Category already exists"
             });
@@ -37,11 +46,10 @@ const createCategory = async (req, res) => {
         // 4. Create category
         const category = await Category.create({
             userId: req.user.userId,
-            name: name.trim(),
+            name: normalizedName,
             type
         });
 
-        // 5. Send response
         return res.status(201).json({
             success: true,
             message: "Category created successfully",
@@ -49,15 +57,20 @@ const createCategory = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Create category error:", error);
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
 
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
-const getAllCategories = async (req, res) => {
+
+
+// GET ALL CATEGORIES
+const getAllCategories = async (req, res, next) => {
     try {
         const categories = await Category.find({
             userId: req.user.userId
@@ -70,18 +83,27 @@ const getAllCategories = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get categories error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
-const getCategoryById = async (req, res) => {
+
+
+// GET CATEGORY BY ID
+const getCategoryById = async (req, res, next) => {
     try {
+        const { id } = req.params;
+
+        // Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category ID"
+            });
+        }
+
+        // Only find categories belonging to this user
         const category = await Category.findOne({
-            _id: req.params.id,
+            _id: id,
             userId: req.user.userId
         });
 
@@ -98,27 +120,38 @@ const getCategoryById = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get category error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
-const updateCategory = async (req, res) => {
+
+
+// PUT UPDATE CATEGORY
+const updateCategory = async (req, res, next) => {
     try {
+        const { id } = req.params;
         const { name, type } = req.body;
 
-        // 1. Validate required fields
-        if (!name || !type) {
+        // 1. Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
                 success: false,
-                message: "Name and type are required"
+                message: "Invalid category ID"
             });
         }
 
-        // 2. Validate category type
+        // 2. Validate required fields
+        if (
+            typeof name !== "string" ||
+            name.trim() === "" ||
+            type === undefined
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid name and type are required"
+            });
+        }
+
+        // 3. Validate type
         if (!["income", "expense"].includes(type)) {
             return res.status(400).json({
                 success: false,
@@ -126,14 +159,31 @@ const updateCategory = async (req, res) => {
             });
         }
 
-        // 3. Update category
+        const normalizedName = name.trim();
+
+        // 4. Prevent duplicate categories for the same user
+        const existingCategory = await Category.findOne({
+            userId: req.user.userId,
+            name: normalizedName,
+            type,
+            _id: { $ne: id }
+        });
+
+        if (existingCategory) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
+
+        // 5. Update only the current user's category
         const category = await Category.findOneAndUpdate(
             {
-                _id: req.params.id,
+                _id: id,
                 userId: req.user.userId
             },
             {
-                name: name.trim(),
+                name: normalizedName,
                 type
             },
             {
@@ -142,7 +192,6 @@ const updateCategory = async (req, res) => {
             }
         );
 
-        // 4. Category not found
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -150,7 +199,6 @@ const updateCategory = async (req, res) => {
             });
         }
 
-        // 5. Send updated category
         return res.status(200).json({
             success: true,
             message: "Category updated successfully",
@@ -158,27 +206,57 @@ const updateCategory = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Update category error:", error);
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
 
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
-const patchCategory = async (req, res) => {
+
+
+// PATCH UPDATE CATEGORY
+const patchCategory = async (req, res, next) => {
     try {
+        const { id } = req.params;
         const { name, type } = req.body;
 
-        // Validate type only if provided
-        if (type && !["income", "expense"].includes(type)) {
+        // 1. Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category ID"
+            });
+        }
+
+        // 2. Validate name if provided
+        if (name !== undefined) {
+            if (
+                typeof name !== "string" ||
+                name.trim() === ""
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Name must be a non-empty string"
+                });
+            }
+        }
+
+        // 3. Validate type if provided
+        if (
+            type !== undefined &&
+            !["income", "expense"].includes(type)
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Type must be income or expense"
             });
         }
 
-        // Build only the fields that were sent
+        // 4. Build update object
         const updateData = {};
 
         if (name !== undefined) {
@@ -189,7 +267,6 @@ const patchCategory = async (req, res) => {
             updateData.type = type;
         }
 
-        // Don't allow empty PATCH request
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({
                 success: false,
@@ -197,9 +274,47 @@ const patchCategory = async (req, res) => {
             });
         }
 
+        // 5. Check duplicate name/type combination
+        const currentCategory = await Category.findOne({
+            _id: id,
+            userId: req.user.userId
+        });
+
+        if (!currentCategory) {
+            return res.status(404).json({
+                success: false,
+                message: "Category not found"
+            });
+        }
+
+        const finalName =
+            updateData.name !== undefined
+                ? updateData.name
+                : currentCategory.name;
+
+        const finalType =
+            updateData.type !== undefined
+                ? updateData.type
+                : currentCategory.type;
+
+        const duplicate = await Category.findOne({
+            userId: req.user.userId,
+            name: finalName,
+            type: finalType,
+            _id: { $ne: id }
+        });
+
+        if (duplicate) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
+
+        // 6. Update only the current user's category
         const category = await Category.findOneAndUpdate(
             {
-                _id: req.params.id,
+                _id: id,
                 userId: req.user.userId
             },
             updateData,
@@ -209,13 +324,6 @@ const patchCategory = async (req, res) => {
             }
         );
 
-        if (!category) {
-            return res.status(404).json({
-                success: false,
-                message: "Category not found"
-            });
-        }
-
         return res.status(200).json({
             success: true,
             message: "Category partially updated successfully",
@@ -223,18 +331,34 @@ const patchCategory = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Patch category error:", error);
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
 
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
-const deleteCategory = async (req, res) => {
+
+
+// DELETE CATEGORY
+const deleteCategory = async (req, res, next) => {
     try {
+        const { id } = req.params;
+
+        // 1. Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category ID"
+            });
+        }
+
+        // 2. Delete only the current user's category
         const category = await Category.findOneAndDelete({
-            _id: req.params.id,
+            _id: id,
             userId: req.user.userId
         });
 
@@ -251,14 +375,10 @@ const deleteCategory = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Delete category error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+        next(error);
     }
 };
+
 
 module.exports = {
     createCategory,

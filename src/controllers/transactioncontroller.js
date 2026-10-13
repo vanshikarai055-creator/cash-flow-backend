@@ -1,5 +1,7 @@
+
 const mongoose = require("mongoose");
 const Transaction = require("../models/transaction.model");
+
 // CREATE TRANSACTION
 const createTransaction = async (req, res, next) => {
     try {
@@ -12,7 +14,11 @@ const createTransaction = async (req, res, next) => {
         } = req.body;
 
         // 1. Check required fields
-        if (amount === undefined || type === undefined || category === undefined) {
+        if (
+            amount === undefined ||
+            type === undefined ||
+            category === undefined
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Amount, type and category are required"
@@ -20,7 +26,11 @@ const createTransaction = async (req, res, next) => {
         }
 
         // 2. Validate amount
-        if (typeof amount !== "number" || amount <= 0) {
+        if (
+            typeof amount !== "number" ||
+            !Number.isFinite(amount) ||
+            amount <= 0
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Amount must be a positive number"
@@ -36,22 +46,62 @@ const createTransaction = async (req, res, next) => {
         }
 
         // 4. Validate category
-        if (typeof category !== "string" || category.trim() === "") {
+        if (
+            typeof category !== "string" ||
+            category.trim() === ""
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Category must be a non-empty string"
             });
         }
 
-        // 5. Create transaction
-        const transaction = await Transaction.create({
+        // 5. Validate description if provided
+        if (
+            description !== undefined &&
+            typeof description !== "string"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Description must be a string"
+            });
+        }
+
+        // 6. Validate date if provided
+        let parsedDate;
+
+        if (date !== undefined) {
+            if (
+                typeof date !== "string" ||
+                date.trim() === "" ||
+                Number.isNaN(Date.parse(date))
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please provide a valid date"
+                });
+            }
+
+            parsedDate = new Date(date);
+        }
+
+        // 7. Create transaction
+        const transactionData = {
             userId: req.user.userId,
             amount,
             type,
-            category: category.trim(),
-            description,
-            date
-        });
+            category: category.trim()
+        };
+
+        if (description !== undefined) {
+            transactionData.description = description;
+        }
+
+        if (parsedDate !== undefined) {
+            transactionData.date = parsedDate;
+        }
+
+        const transaction = await Transaction.create(transactionData);
 
         return res.status(201).json({
             success: true,
@@ -64,8 +114,10 @@ const createTransaction = async (req, res, next) => {
         next(error);
     }
 };
+
+
 // GET ALL TRANSACTIONS WITH PAGINATION
-const getAllTransactions = async (req, res,next) => {
+const getAllTransactions = async (req, res, next) => {
     try {
         const userId = req.user.userId;
 
@@ -93,21 +145,20 @@ const getAllTransactions = async (req, res,next) => {
             });
         }
 
-        // Calculate how many documents to skip
+        // Calculate documents to skip
         const skip = (page - 1) * limit;
 
-        // Get transactions
+        // Get only the logged-in user's transactions
         const transactions = await Transaction.find({ userId })
             .sort({ date: -1 })
             .skip(skip)
             .limit(limit);
 
-        // Count total transactions
+        // Count total transactions for this user
         const totalTransactions = await Transaction.countDocuments({
             userId
         });
 
-        // Calculate total pages
         const totalPages = Math.ceil(totalTransactions / limit);
 
         return res.status(200).json({
@@ -123,14 +174,13 @@ const getAllTransactions = async (req, res,next) => {
 
     } catch (error) {
         console.error("Get all transactions error:", error);
-
         next(error);
     }
 };
 
 
 // GET TRANSACTION BY ID
-const getTransactionById = async (req, res,next) => {
+const getTransactionById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -142,6 +192,7 @@ const getTransactionById = async (req, res,next) => {
             });
         }
 
+        // Find transaction belonging to the logged-in user
         const transaction = await Transaction.findOne({
             _id: id,
             userId: req.user.userId
@@ -161,7 +212,6 @@ const getTransactionById = async (req, res,next) => {
 
     } catch (error) {
         console.error("Get transaction error:", error);
-
         next(error);
     }
 };
@@ -201,7 +251,11 @@ const updateTransaction = async (req, res, next) => {
         }
 
         // 3. Validate amount
-        if (typeof amount !== "number" || amount <= 0) {
+        if (
+            typeof amount !== "number" ||
+            !Number.isFinite(amount) ||
+            amount <= 0
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Amount must be a positive number"
@@ -227,26 +281,63 @@ const updateTransaction = async (req, res, next) => {
             });
         }
 
-        // 6. Update transaction
+        // 6. Validate description if provided
+        if (
+            description !== undefined &&
+            typeof description !== "string"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Description must be a string"
+            });
+        }
+
+        // 7. Validate date if provided
+        let parsedDate;
+
+        if (date !== undefined) {
+            if (
+                typeof date !== "string" ||
+                date.trim() === "" ||
+                Number.isNaN(Date.parse(date))
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please provide a valid date"
+                });
+            }
+
+            parsedDate = new Date(date);
+        }
+
+        // 8. Prepare update data
+        const updateData = {
+            amount,
+            type,
+            category: category.trim()
+        };
+
+        if (description !== undefined) {
+            updateData.description = description;
+        }
+
+        if (parsedDate !== undefined) {
+            updateData.date = parsedDate;
+        }
+
+        // 9. Update only the logged-in user's transaction
         const transaction = await Transaction.findOneAndUpdate(
             {
                 _id: id,
                 userId: req.user.userId
             },
-            {
-                amount,
-                type,
-                category: category.trim(),
-                description,
-                date
-            },
+            updateData,
             {
                 new: true,
                 runValidators: true
             }
         );
 
-        // 7. Transaction not found
         if (!transaction) {
             return res.status(404).json({
                 success: false,
@@ -290,7 +381,11 @@ const patchTransaction = async (req, res, next) => {
 
         // 2. Validate amount only if provided
         if (amount !== undefined) {
-            if (typeof amount !== "number" || amount <= 0) {
+            if (
+                typeof amount !== "number" ||
+                !Number.isFinite(amount) ||
+                amount <= 0
+            ) {
                 return res.status(400).json({
                     success: false,
                     message: "Amount must be a positive number"
@@ -321,7 +416,36 @@ const patchTransaction = async (req, res, next) => {
             }
         }
 
-        // 5. Create update object
+        // 5. Validate description if provided
+        if (
+            description !== undefined &&
+            typeof description !== "string"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Description must be a string"
+            });
+        }
+
+        // 6. Validate date if provided
+        let parsedDate;
+
+        if (date !== undefined) {
+            if (
+                typeof date !== "string" ||
+                date.trim() === "" ||
+                Number.isNaN(Date.parse(date))
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please provide a valid date"
+                });
+            }
+
+            parsedDate = new Date(date);
+        }
+
+        // 7. Create update object
         const updateData = {};
 
         if (amount !== undefined) {
@@ -340,11 +464,11 @@ const patchTransaction = async (req, res, next) => {
             updateData.description = description;
         }
 
-        if (date !== undefined) {
-            updateData.date = date;
+        if (parsedDate !== undefined) {
+            updateData.date = parsedDate;
         }
 
-        // 6. Make sure at least one field was provided
+        // 8. Ensure at least one field was provided
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({
                 success: false,
@@ -352,7 +476,7 @@ const patchTransaction = async (req, res, next) => {
             });
         }
 
-        // 7. Update transaction
+        // 9. Update only the logged-in user's transaction
         const transaction = await Transaction.findOneAndUpdate(
             {
                 _id: id,
@@ -365,7 +489,6 @@ const patchTransaction = async (req, res, next) => {
             }
         );
 
-        // 8. Transaction not found
         if (!transaction) {
             return res.status(404).json({
                 success: false,
@@ -387,7 +510,7 @@ const patchTransaction = async (req, res, next) => {
 
 
 // DELETE TRANSACTION
-const deleteTransaction = async (req, res,next) => {
+const deleteTransaction = async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -399,6 +522,7 @@ const deleteTransaction = async (req, res,next) => {
             });
         }
 
+        // Delete only the logged-in user's transaction
         const transaction = await Transaction.findOneAndDelete({
             _id: id,
             userId: req.user.userId
@@ -418,22 +542,27 @@ const deleteTransaction = async (req, res,next) => {
 
     } catch (error) {
         console.error("Delete transaction error:", error);
-
         next(error);
     }
 };
 
+
 // FILTER TRANSACTIONS WITH PAGINATION
-const filterTransactions = async (req, res,next) => {
+const filterTransactions = async (req, res, next) => {
     try {
         const userId = req.user.userId;
 
-        const { type, category, startDate, endDate } = req.query;
+        const {
+            type,
+            category,
+            startDate,
+            endDate
+        } = req.query;
 
         const page = Number(req.query.page) || 1;
         const limit = Number(req.query.limit) || 10;
 
-        // Validate page and limit
+        // 1. Validate page and limit
         if (
             !Number.isInteger(page) ||
             !Number.isInteger(limit) ||
@@ -446,7 +575,7 @@ const filterTransactions = async (req, res,next) => {
             });
         }
 
-        // Prevent very large requests
+        // 2. Prevent very large requests
         if (limit > 100) {
             return res.status(400).json({
                 success: false,
@@ -454,14 +583,12 @@ const filterTransactions = async (req, res,next) => {
             });
         }
 
-        // Base filter
-        const filter = {
-            userId
-        };
+        // 3. Base filter: current user only
+        const filter = { userId };
 
-        // Filter by type
+        // 4. Filter by type
         if (type) {
-            if (type !== "income" && type !== "expense") {
+            if (!["income", "expense"].includes(type)) {
                 return res.status(400).json({
                     success: false,
                     message: "Type must be income or expense"
@@ -471,72 +598,80 @@ const filterTransactions = async (req, res,next) => {
             filter.type = type;
         }
 
-        // Filter by category
+        // 5. Filter by category
         if (category) {
-            filter.category = category;
+            if (typeof category !== "string") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Category must be a string"
+                });
+            }
+
+            filter.category = category.trim();
         }
 
-        // Filter by date
-        if (startDate || endDate) {
-            filter.date = {};
-        }
+        // 6. Filter by date
+        let start;
+        let end;
 
-        // Start date validation
         if (startDate) {
-            const start = new Date(startDate);
+            start = new Date(startDate);
 
-            if (isNaN(start.getTime())) {
+            if (Number.isNaN(start.getTime())) {
                 return res.status(400).json({
                     success: false,
                     message: "Invalid start date"
                 });
             }
-
-            filter.date.$gte = start;
         }
 
-        // End date validation
         if (endDate) {
-            const end = new Date(endDate);
+            end = new Date(endDate);
 
-            if (isNaN(end.getTime())) {
+            if (Number.isNaN(end.getTime())) {
                 return res.status(400).json({
                     success: false,
                     message: "Invalid end date"
                 });
             }
 
+            // Include the entire end date
             end.setHours(23, 59, 59, 999);
-
-            filter.date.$lte = end;
         }
 
-        // Check date order
-        if (startDate && endDate) {
-            const start = new Date(startDate);
-            const end = new Date(endDate);
+        // 7. Validate date range
+        if (start && end && start > end) {
+            return res.status(400).json({
+                success: false,
+                message: "Start date cannot be after end date"
+            });
+        }
 
-            if (start > end) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Start date cannot be after end date"
-                });
+        if (start || end) {
+            filter.date = {};
+
+            if (start) {
+                filter.date.$gte = start;
+            }
+
+            if (end) {
+                filter.date.$lte = end;
             }
         }
 
-        // Pagination
+        // 8. Pagination
         const skip = (page - 1) * limit;
 
-        // Get transactions
+        // 9. Get matching transactions for this user
         const transactions = await Transaction.find(filter)
             .sort({ date: -1 })
             .skip(skip)
             .limit(limit);
 
-        // Count total matching transactions
-        const totalTransactions = await Transaction.countDocuments(filter);
+        // 10. Count matching transactions
+        const totalTransactions =
+            await Transaction.countDocuments(filter);
 
-        // Calculate total pages
         const totalPages = Math.ceil(totalTransactions / limit);
 
         return res.status(200).json({
@@ -552,15 +687,12 @@ const filterTransactions = async (req, res,next) => {
 
     } catch (error) {
         console.error("Filter transactions error:", error);
-
         next(error);
     }
 };
 
-               
 
-
-// EXPORT
+// EXPORT CONTROLLERS
 module.exports = {
     createTransaction,
     getAllTransactions,

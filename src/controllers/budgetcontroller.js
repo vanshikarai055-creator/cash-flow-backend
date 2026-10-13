@@ -1,76 +1,131 @@
+
+
+const mongoose = require("mongoose");
 const Budget = require("../models/budget.model");
 const Transaction = require("../models/transaction.model");
 
+// Validate month and year
+const validateMonthYear = (month, year) => {
+    if (
+        month === undefined ||
+        month === null ||
+        month === "" ||
+        year === undefined ||
+        year === null ||
+        year === ""
+    ) {
+        return null;
+    }
+
+    const monthNumber = Number(month);
+    const yearNumber = Number(year);
+
+    if (
+        !Number.isInteger(monthNumber) ||
+        monthNumber < 1 ||
+        monthNumber > 12 ||
+        !Number.isInteger(yearNumber) ||
+        yearNumber < 2000 ||
+        yearNumber > 9999
+    ) {
+        return null;
+    }
+
+    return { monthNumber, yearNumber };
+};
+
+// Validate budget amount
+const validateAmount = (amount) => {
+    if (
+        amount === undefined ||
+        amount === null ||
+        (typeof amount === "string" && amount.trim() === "")
+    ) {
+        return null;
+    }
+
+    const amountNumber = Number(amount);
+
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+        return null;
+    }
+
+    return amountNumber;
+};
+
+// Create budget
 const createBudget = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const { category, amount, month, year } = req.body;
 
-        const {
-            category,
-            amount,
-            month,
-            year
-        } = req.body;
-
-        // 1. Validate required fields
-        if (!category || !amount || !month || !year) {
+        if (
+            typeof category !== "string" ||
+            !category.trim() ||
+            amount === undefined ||
+            amount === null ||
+            amount === "" ||
+            month === undefined ||
+            month === null ||
+            month === "" ||
+            year === undefined ||
+            year === null ||
+            year === ""
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Category, amount, month and year are required"
             });
         }
 
-        // 2. Convert values to numbers
-        const amountNumber = Number(amount);
-        const monthNumber = Number(month);
-        const yearNumber = Number(year);
+        const amountNumber = validateAmount(amount);
+        const dates = validateMonthYear(month, year);
 
-        // 3. Validate values
-        if (
-            amountNumber <= 0 ||
-            monthNumber < 1 ||
-            monthNumber > 12 ||
-            !Number.isInteger(monthNumber) ||
-            !Number.isInteger(yearNumber)
-        ) {
+        if (amountNumber === null || !dates) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid budget details"
             });
         }
 
-        // 4. Check if budget already exists
+        const cleanCategory = category.trim();
+
         const existingBudget = await Budget.findOne({
             userId,
-            category,
-            month: monthNumber,
-            year: yearNumber
+            category: cleanCategory,
+            month: dates.monthNumber,
+            year: dates.yearNumber
         });
 
         if (existingBudget) {
-            return res.status(400).json({
+            return res.status(409).json({
                 success: false,
                 message: "Budget already exists for this category and month"
             });
         }
 
-        // 5. Create budget
         const budget = await Budget.create({
             userId,
-            category,
+            category: cleanCategory,
             amount: amountNumber,
-            month: monthNumber,
-            year: yearNumber
+            month: dates.monthNumber,
+            year: dates.yearNumber
         });
 
-        // 6. Send response
         return res.status(201).json({
             success: true,
             message: "Budget created successfully",
             budget
         });
-
     } catch (error) {
+        // Handle duplicate-key errors from a unique MongoDB index
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "Budget already exists for this category and month"
+            });
+        }
+
         console.error("Create budget error:", error);
 
         return res.status(500).json({
@@ -79,47 +134,32 @@ const createBudget = async (req, res) => {
         });
     }
 };
+
+// Get budgets for a month
 const getBudgets = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const dates = validateMonthYear(req.query.month, req.query.year);
 
-        const { month, year } = req.query;
-
-        if (!month || !year) {
+        if (!dates) {
             return res.status(400).json({
                 success: false,
-                message: "Month and year are required"
-            });
-        }
-
-        const monthNumber = Number(month);
-        const yearNumber = Number(year);
-
-        if (
-            !Number.isInteger(monthNumber) ||
-            monthNumber < 1 ||
-            monthNumber > 12 ||
-            !Number.isInteger(yearNumber)
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid month or year"
+                message: "Valid month and year are required"
             });
         }
 
         const budgets = await Budget.find({
             userId,
-            month: monthNumber,
-            year: yearNumber
-        });
+            month: dates.monthNumber,
+            year: dates.yearNumber
+        }).sort({ category: 1 });
 
         return res.status(200).json({
             success: true,
-            month: monthNumber,
-            year: yearNumber,
+            month: dates.monthNumber,
+            year: dates.yearNumber,
             budgets
         });
-
     } catch (error) {
         console.error("Get budgets error:", error);
 
@@ -129,55 +169,33 @@ const getBudgets = async (req, res) => {
         });
     }
 };
+
+// Get budget status and monthly spending
 const getBudgetStatus = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const dates = validateMonthYear(req.query.month, req.query.year);
 
-        const { month, year } = req.query;
-
-        if (!month || !year) {
+        if (!dates) {
             return res.status(400).json({
                 success: false,
-                message: "Month and year are required"
+                message: "Valid month and year are required"
             });
         }
 
-        const monthNumber = Number(month);
-        const yearNumber = Number(year);
+        const { monthNumber, yearNumber } = dates;
 
-        if (
-            !Number.isInteger(monthNumber) ||
-            monthNumber < 1 ||
-            monthNumber > 12 ||
-            !Number.isInteger(yearNumber)
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid month or year"
-            });
-        }
-
-        // Get user's budgets for this month
+        // Fetch only the authenticated user's budgets
         const budgets = await Budget.find({
             userId,
             month: monthNumber,
             year: yearNumber
         });
 
-        // Get start and end dates of the month
-        const startDate = new Date(
-            yearNumber,
-            monthNumber - 1,
-            1
-        );
+        const startDate = new Date(yearNumber, monthNumber - 1, 1);
+        const endDate = new Date(yearNumber, monthNumber, 1);
 
-        const endDate = new Date(
-            yearNumber,
-            monthNumber,
-            1
-        );
-
-        // Get expenses for this month
+        // Fetch only the authenticated user's expenses for this month
         const transactions = await Transaction.find({
             userId,
             type: "expense",
@@ -187,29 +205,28 @@ const getBudgetStatus = async (req, res) => {
             }
         });
 
-        // Calculate spending category-wise
         const spending = {};
 
         transactions.forEach((transaction) => {
             const category = transaction.category;
 
-            if (!spending[category]) {
-                spending[category] = 0;
-            }
-
-            spending[category] += transaction.amount;
+            spending[category] =
+                (spending[category] || 0) + transaction.amount;
         });
 
-        // Compare budget with spending
         const result = budgets.map((budget) => {
             const spent = spending[budget.category] || 0;
+            const remaining = budget.amount - spent;
 
             return {
                 category: budget.category,
                 budget: budget.amount,
                 spent,
-                remaining: budget.amount - spent,
-                exceeded: spent > budget.amount
+                remaining,
+                exceeded: spent > budget.amount,
+                usagePercentage: Number(
+                    ((spent / budget.amount) * 100).toFixed(2)
+                )
             };
         });
 
@@ -219,7 +236,6 @@ const getBudgetStatus = async (req, res) => {
             year: yearNumber,
             budgets: result
         });
-
     } catch (error) {
         console.error("Budget status error:", error);
 
@@ -229,13 +245,29 @@ const getBudgetStatus = async (req, res) => {
         });
     }
 };
+
+// Update budget
 const updateBudget = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { id } = req.params;
-
         const { category, amount } = req.body;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid budget ID"
+            });
+        }
+
+        if (category === undefined && amount === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide category or amount to update"
+            });
+        }
+
+        // Restrict lookup to the authenticated user
         const budget = await Budget.findOne({
             _id: id,
             userId
@@ -248,22 +280,53 @@ const updateBudget = async (req, res) => {
             });
         }
 
-        if (category) {
-            budget.category = category;
-        }
+        let cleanCategory = budget.category;
 
-        if (amount !== undefined) {
-            const amountNumber = Number(amount);
-
-            if (amountNumber <= 0) {
+        if (category !== undefined) {
+            if (
+                typeof category !== "string" ||
+                !category.trim()
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "Amount must be greater than 0"
+                    message: "Category must be a non-empty string"
                 });
             }
 
-            budget.amount = amountNumber;
+            cleanCategory = category.trim();
         }
+
+        let amountNumber = budget.amount;
+
+        if (amount !== undefined) {
+            amountNumber = validateAmount(amount);
+
+            if (amountNumber === null) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Amount must be a valid number greater than 0"
+                });
+            }
+        }
+
+        // Prevent duplicate budgets for the same user/category/month/year
+        const duplicate = await Budget.findOne({
+            _id: { $ne: budget._id },
+            userId,
+            category: cleanCategory,
+            month: budget.month,
+            year: budget.year
+        });
+
+        if (duplicate) {
+            return res.status(409).json({
+                success: false,
+                message: "A budget already exists for this category and month"
+            });
+        }
+
+        budget.category = cleanCategory;
+        budget.amount = amountNumber;
 
         await budget.save();
 
@@ -272,8 +335,14 @@ const updateBudget = async (req, res) => {
             message: "Budget updated successfully",
             budget
         });
-
     } catch (error) {
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "A budget already exists for this category and month"
+            });
+        }
+
         console.error("Update budget error:", error);
 
         return res.status(500).json({
@@ -282,11 +351,21 @@ const updateBudget = async (req, res) => {
         });
     }
 };
+
+// Delete budget
 const deleteBudget = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid budget ID"
+            });
+        }
+
+        // Delete only if this budget belongs to the authenticated user
         const budget = await Budget.findOneAndDelete({
             _id: id,
             userId
@@ -303,7 +382,6 @@ const deleteBudget = async (req, res) => {
             success: true,
             message: "Budget deleted successfully"
         });
-
     } catch (error) {
         console.error("Delete budget error:", error);
 
@@ -313,6 +391,7 @@ const deleteBudget = async (req, res) => {
         });
     }
 };
+
 module.exports = {
     createBudget,
     getBudgets,

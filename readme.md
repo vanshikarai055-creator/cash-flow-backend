@@ -1,27 +1,19 @@
 # Cash Flow Backend
 
-A RESTful backend API for managing personal finances, including income, expenses, categories, budgets, summaries, and dashboard analytics.
+A RESTful personal finance management API built with Node.js, Express.js, and MongoDB. It enables users to securely manage income, expenses, categories, monthly budgets, and financial summaries.
 
 ## Features
 
-- User registration and login
-- JWT-based authentication
-- Password hashing with bcrypt
-- Income and expense management
-- Transaction filtering
-- Transaction pagination
-- Transaction update and partial update
-- Category management
-- Monthly and yearly summaries
-- Category-wise expense summary
-- Budget management
-- Budget status tracking
-- Dashboard analytics
-- Centralized error handling
-- Request rate limiting
-- CORS configuration
-- Security headers with Helmet
-- MongoDB indexing for improved query performance
+- **Authentication:** User registration, login, JWT authentication, and bcrypt password hashing.
+- **Transaction Management:** Create, retrieve, update, partially update, delete, and filter transactions.
+- **Pagination:** Retrieve transaction records in manageable pages.
+- **Category Management:** Organize transactions by category.
+- **Financial Summaries:** Generate monthly, yearly, and category-wise expense summaries.
+- **Budget Management:** Create and manage budgets and track spending against budget limits.
+- **Dashboard Analytics:** Access financial summaries and spending insights.
+- **Error Handling:** Centralized error-handling middleware.
+- **Security:** Helmet security headers, CORS configuration, and rate limiting.
+- **Database Performance:** MongoDB indexes for supported queries.
 
 ## Tech Stack
 
@@ -29,7 +21,7 @@ A RESTful backend API for managing personal finances, including income, expenses
 - Express.js
 - MongoDB
 - Mongoose
-- JWT
+- JSON Web Tokens (JWT)
 - bcrypt
 - Helmet
 - CORS
@@ -38,11 +30,11 @@ A RESTful backend API for managing personal finances, including income, expenses
 
 ## Project Structure
 
+```text
 src/
 ├── config/
 │   ├── db.js
 │   └── env.js
-│
 ├── controllers/
 │   ├── authcontroller.js
 │   ├── budgetcontroller.js
@@ -50,17 +42,14 @@ src/
 │   ├── dashboardcontroller.js
 │   ├── summarycontroller.js
 │   └── transactioncontroller.js
-│
 ├── middlewares/
 │   ├── authmiddleware.js
 │   └── errormiddleware.js
-│
 ├── models/
 │   ├── budget.model.js
 │   ├── category.model.js
 │   ├── transaction.model.js
 │   └── user.model.js
-│
 ├── routes/
 │   ├── authRoutes.js
 │   ├── budgetroutes.js
@@ -68,148 +57,152 @@ src/
 │   ├── dashboardroutes.js
 │   ├── summaryroutes.js
 │   └── transactionroutes.js
-│
 ├── app.js
 └── server.js
+```
 
 ## Installation
 
-Clone the repository:
+### 1. Clone the repository
 
+```bash
 git clone https://github.com/vanshikarai055-creator/cash-flow-backend.git
-
-Go into the project:
-
 cd cash-flow-backend
+```
 
-Install dependencies:
+### 2. Install dependencies
 
+```bash
 npm install
+```
 
-## Environment Variables
+### 3. Configure environment variables
 
-Create a `.env` file in the root directory.
+Create a `.env` file in the project root. Use `.env.example` as a reference.
 
-Use `.env.example` as a reference.
-
-Example:
-
+```env
 PORT=8000
 MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
+JWT_SECRET=your_secure_jwt_secret
 FRONTEND_URL=http://localhost:3000
+```
 
-## Run the Server
+Use the environment variable names expected by your application. Never commit real secrets or database credentials.
 
-Development mode:
+### 4. Start the server
 
+Run in development mode:
+
+```bash
 npm run dev
+```
 
-The server runs on:
-
-http://localhost:8000
+The API should be available at `http://localhost:8000`.
 
 ## Authentication
 
-Protected APIs require a JWT token.
+Protected endpoints require a valid JWT.
 
-Send the token using the Authorization header:
+Include the following HTTP header:
 
+```http
 Authorization: Bearer YOUR_TOKEN
+```
 
-## API Modules
+Register or log in to obtain a token, then use it to access protected resources.
+
+## API Endpoints
+
+The following endpoints reflect the current documented API design. Verify each route against your route files before relying on this list.
 
 ### Authentication
 
-POST /api/auth/register
-
-POST /api/auth/login
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/auth/register` | Register a user |
+| POST | `/api/auth/login` | Log in |
 
 ### Transactions
 
-POST /api/transactions
-
-GET /api/transactions
-
-GET /api/transactions/:id
-
-GET /api/transactions/filter
-
-PUT /api/transactions/:id
-
-PATCH /api/transactions/:id
-
-DELETE /api/transactions/:id
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/transactions` | Create a transaction |
+| GET | `/api/transactions` | List transactions with pagination |
+| GET | `/api/transactions/:id` | Retrieve a transaction |
+| GET | `/api/transactions/filter` | Filter transactions |
+| PUT | `/api/transactions/:id` | Update a transaction |
+| PATCH | `/api/transactions/:id` | Partially update a transaction |
+| DELETE | `/api/transactions/:id` | Delete a transaction |
 
 ### Categories
 
-Category APIs are available under:
+Category endpoints are available under `/api/categories` for supported category operations.
 
-/api/categories
+### Financial Summaries
 
-### Summary
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/summary` | Retrieve financial totals |
+| GET | `/api/summary/monthly` | Monthly summary |
+| GET | `/api/summary/yearly` | Yearly summary |
+| GET | `/api/summary/category` | Category-wise expense summary |
 
-GET /api/summary
+### Budgets
 
-GET /api/summary/monthly
-
-GET /api/summary/yearly
-
-GET /api/summary/category
-
-### Budget
-
-POST /api/budget
-
-GET /api/budget
-
-GET /api/budget/status
-
-PUT /api/budget/:id
-
-DELETE /api/budget/:id
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/budget` | Create a budget |
+| GET | `/api/budget` | List budgets |
+| GET | `/api/budget/status` | Retrieve budget status |
+| PUT | `/api/budget/:id` | Update a budget |
+| DELETE | `/api/budget/:id` | Delete a budget |
 
 ### Dashboard
 
-GET /api/dashboard
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/dashboard` | Retrieve dashboard analytics |
+
+Protected endpoints require authentication unless explicitly configured otherwise.
 
 ## Error Handling
 
-The application uses centralized error handling middleware to provide consistent error responses.
+The application uses centralized error-handling middleware to provide consistent error responses.
 
 Example:
 
+```json
 {
-    "success": false,
-    "message": "Error message"
+  "success": false,
+  "message": "Error message"
 }
+```
 
 ## Security
 
-The backend includes:
+Security measures include:
 
-- JWT authentication
-- bcrypt password hashing
-- Helmet security headers
-- CORS configuration
-- Global rate limiting
-- Authentication-specific rate limiting
-- Environment variables for sensitive configuration
+- JWT-based authentication.
+- Password hashing with bcrypt.
+- Helmet security headers.
+- Configurable CORS.
+- Global and authentication-specific rate limiting.
+- Environment variables for sensitive configuration.
+- User-scoped database queries for protected resources.
 
 ## Future Improvements
 
-- Automated testing
-- API documentation with Swagger/OpenAPI
-- Logging with Winston or Pino
-- Docker support
-- CI/CD pipeline
-- Deployment
-- Redis caching
-- Frontend integration
+- Automated unit and integration testing.
+- Structured logging with Winston or Pino.
+- Docker containerization.
+- CI/CD pipeline.
+- Deployment to a cloud platform.
+- Redis caching where appropriate.
+- Frontend integration.
+- Exportable financial reports.
 
 ## Author
 
-Vanshika
+**Vanshika**
 
-GitHub:
-https://github.com/vanshikarai055-creator
+GitHub: https://github.com/vanshikarai055-creator
