@@ -1,18 +1,19 @@
 # Cash Flow Backend
 
-A RESTful personal finance management API built with Node.js, Express.js, and MongoDB. It enables users to securely manage income, expenses, categories, monthly budgets, and financial summaries.
+A RESTful personal finance management API built with **Node.js, Express.js, and MongoDB**. Cash Flow enables users to manage income, expenses, categories, monthly budgets, and financial summaries through authenticated API endpoints.
 
 ## Features
 
-- **Authentication:** User registration, login, JWT authentication, and bcrypt password hashing.
+- **Authentication:** User registration and login using JWT authentication and bcrypt password hashing.
 - **Transaction Management:** Create, retrieve, update, partially update, delete, and filter transactions.
 - **Pagination:** Retrieve transaction records in manageable pages.
 - **Category Management:** Organize transactions by category.
-- **Financial Summaries:** Generate monthly, yearly, and category-wise expense summaries.
-- **Budget Management:** Create and manage budgets and track spending against budget limits.
-- **Dashboard Analytics:** Access financial summaries and spending insights.
+- **Financial Summaries:** Generate overall, monthly, yearly, and category-wise expense summaries.
+- **Budget Management:** Create and manage monthly budgets and track spending against budget limits.
+- **Spending Insights:** Compare category-wise spending with the previous month and identify spending trends.
+- **Dashboard Analytics:** Retrieve financial summaries and dashboard information.
 - **Error Handling:** Centralized error-handling middleware.
-- **Security:** Helmet security headers, CORS configuration, and rate limiting.
+- **Security:** Helmet security headers, configurable CORS, rate limiting, and user-scoped database queries.
 - **Database Performance:** MongoDB indexes for supported queries.
 
 ## Tech Stack
@@ -22,7 +23,7 @@ A RESTful personal finance management API built with Node.js, Express.js, and Mo
 - MongoDB
 - Mongoose
 - JSON Web Tokens (JWT)
-- bcrypt
+- bcrypt / bcryptjs
 - Helmet
 - CORS
 - express-rate-limit
@@ -61,7 +62,7 @@ src/
 └── server.js
 ```
 
-## Installation
+## Installation and Setup
 
 ### 1. Clone the repository
 
@@ -78,7 +79,7 @@ npm install
 
 ### 3. Configure environment variables
 
-Create a `.env` file in the project root. Use `.env.example` as a reference.
+Create a `.env` file in the project root. Use `.env.example` as a reference if it exists.
 
 ```env
 PORT=8000
@@ -87,33 +88,37 @@ JWT_SECRET=your_secure_jwt_secret
 FRONTEND_URL=http://localhost:3000
 ```
 
-Use the environment variable names expected by your application. Never commit real secrets or database credentials.
+Use the exact environment variable names required by your application. Add any other required variables documented in your configuration. Never commit real secrets or database credentials.
 
 ### 4. Start the server
-
-Run in development mode:
 
 ```bash
 npm run dev
 ```
 
-The API should be available at `http://localhost:8000`.
+The API should be available at:
+
+`http://localhost:8000`
+
+The root endpoint can be used to check whether the API is running, if configured in the application.
 
 ## Authentication
 
 Protected endpoints require a valid JWT.
 
-Include the following HTTP header:
+Include the token in the HTTP request header:
 
 ```http
 Authorization: Bearer YOUR_TOKEN
 ```
 
-Register or log in to obtain a token, then use it to access protected resources.
+Register or log in to obtain a token, then use it to access protected resources. Never publish real authentication tokens.
 
 ## API Endpoints
 
-The following endpoints reflect the current documented API design. Verify each route against your route files before relying on this list.
+Base URL: `http://localhost:8000`
+
+The endpoint list below is based on the project's documented route design. Verify exact paths, query parameters, and authentication requirements against the current route files.
 
 ### Authentication
 
@@ -136,16 +141,21 @@ The following endpoints reflect the current documented API design. Verify each r
 
 ### Categories
 
-Category endpoints are available under `/api/categories` for supported category operations.
+Category operations are available under `/api/categories`. Check the category routes for the supported create, retrieve, update, and delete operations.
 
 ### Financial Summaries
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/api/summary` | Retrieve financial totals |
-| GET | `/api/summary/monthly` | Monthly summary |
-| GET | `/api/summary/yearly` | Yearly summary |
-| GET | `/api/summary/category` | Category-wise expense summary |
+| GET | `/api/summary` | Retrieve overall financial totals |
+| GET | `/api/summary/monthly` | Retrieve a monthly summary |
+| GET | `/api/summary/yearly` | Retrieve a yearly summary |
+| GET | `/api/summary/category` | Retrieve category-wise expense totals |
+| GET | `/api/summary/insights` | Compare current- and previous-month spending |
+
+Monthly summary and spending insights accept `month` and `year` query parameters, for example:
+
+`/api/summary/insights?month=10&year=2026`
 
 ### Budgets
 
@@ -153,7 +163,7 @@ Category endpoints are available under `/api/categories` for supported category 
 |---|---|---|
 | POST | `/api/budget` | Create a budget |
 | GET | `/api/budget` | List budgets |
-| GET | `/api/budget/status` | Retrieve budget status |
+| GET | `/api/budget/status` | Retrieve spending and budget status |
 | PUT | `/api/budget/:id` | Update a budget |
 | DELETE | `/api/budget/:id` | Delete a budget |
 
@@ -167,9 +177,9 @@ Protected endpoints require authentication unless explicitly configured otherwis
 
 ## Error Handling
 
-The application uses centralized error-handling middleware to provide consistent error responses.
+The application uses centralized error-handling middleware for consistent error responses.
 
-Example:
+Example response:
 
 ```json
 {
@@ -178,25 +188,25 @@ Example:
 }
 ```
 
-## Security
+HTTP status codes depend on the type of request and error.
 
-Security measures include:
+## Security
 
 - JWT-based authentication.
 - Password hashing with bcrypt.
 - Helmet security headers.
 - Configurable CORS.
-- Global and authentication-specific rate limiting.
+- Rate limiting.
 - Environment variables for sensitive configuration.
-- User-scoped database queries for protected resources.
+- User-scoped queries for protected resources.
 
 ## Future Improvements
 
-- Automated unit and integration testing.
+- Automated unit and integration tests.
 - Structured logging with Winston or Pino.
 - Docker containerization.
 - CI/CD pipeline.
-- Deployment to a cloud platform.
+- Cloud deployment.
 - Redis caching where appropriate.
 - Frontend integration.
 - Exportable financial reports.
@@ -205,4 +215,4 @@ Security measures include:
 
 **Vanshika**
 
-GitHub: https://github.com/vanshikarai055-creator
+GitHub: [vanshikarai055-creator](https://github.com/vanshikarai055-creator)
