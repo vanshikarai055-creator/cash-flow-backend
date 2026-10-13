@@ -1,21 +1,55 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
-const jwt=require("jsonwebtoken");
+const jwt = require("jsonwebtoken");
 
-
-
+// Register user
 const registerUser = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        if (!name || !email || !password) {
+        // Validate required fields
+        if (
+            typeof name !== "string" ||
+            !name.trim() ||
+            typeof email !== "string" ||
+            !email.trim() ||
+            typeof password !== "string" ||
+            password.length === 0
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Name, email,password are required"
+                message: "Valid name, email and password are required"
             });
         }
 
-        const existingUser = await User.findOne({ email });
+        // Validate password length for bcrypt
+        if (
+            password.trim().length === 0 ||
+            Buffer.byteLength(password, "utf8") > 72
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must not be empty or exceed 72 UTF-8 bytes"
+            });
+        }
+
+        const cleanName = name.trim();
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Basic email format validation
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailPattern.test(cleanEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide a valid email address"
+            });
+        }
+
+        // Check whether the user already exists
+        const existingUser = await User.findOne({
+            email: cleanEmail
+        });
 
         if (existingUser) {
             return res.status(409).json({
@@ -24,11 +58,12 @@ const registerUser = async (req, res) => {
             });
         }
 
+        // Hash password before saving
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await User.create({
-            name,
-            email,
+            name: cleanName,
+            email: cleanEmail,
             password: hashedPassword
         });
 
@@ -43,7 +78,15 @@ const registerUser = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("register error", error);
+        // Handle duplicate email if a unique database index exists
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "User already exists"
+            });
+        }
+
+        console.error("Register error:", error);
 
         return res.status(500).json({
             success: false,
@@ -52,69 +95,100 @@ const registerUser = async (req, res) => {
     }
 };
 
-const loginUser=async (req,res)=>{
-    try{
-        const{email,password}=req.body;
+// Login user
+const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-
-        if(!email ||!password){
+        // Validate required fields
+        if (
+            typeof email !== "string" ||
+            !email.trim() ||
+            typeof password !== "string" ||
+            password.length === 0
+        ) {
             return res.status(400).json({
-                success:false,
-                message:"email and password are required"
+                success: false,
+                message: "Valid email and password are required"
             });
         }
 
-        const user=await User.findOne({email}).select("+password");
-
-        if(!user){
+        if (Buffer.byteLength(password, "utf8") > 72) {
             return res.status(401).json({
-                success:false,
-                message:"invalid email or password"
+                success: false,
+                message: "Invalid email or password"
             });
         }
 
-        const isPasswordCorrect=await bcrypt.compare(
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Check JWT configuration
+        if (!process.env.JWT_SECRET) {
+            console.error("JWT_SECRET is not configured");
+
+            return res.status(500).json({
+                success: false,
+                message: "Authentication service is not configured"
+            });
+        }
+
+        // Find user and retrieve password hash
+        const user = await User.findOne({
+            email: cleanEmail
+        }).select("+password");
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid email or password"
+            });
+        }
+
+        // Compare submitted password with stored hash
+        const isPasswordCorrect = await bcrypt.compare(
             password,
             user.password
         );
 
-        if(!isPasswordCorrect){
+        if (!isPasswordCorrect) {
             return res.status(401).json({
-                success:false,
-                message:"invalid email or password"
+                success: false,
+                message: "Invalid email or password"
             });
         }
 
-        const token=jwt.sign(
+        // Generate JWT
+        const token = jwt.sign(
             {
-                userId:user.id
+                userId: user._id.toString()
             },
             process.env.JWT_SECRET,
             {
-                expiresIn:process.env.JWT_EXPIRES_IN || "7d"
+                expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+                algorithm: "HS256"
             }
         );
 
         return res.status(200).json({
-            success:true,
-            message:"login successful",
+            success: true,
+            message: "Login successful",
             token,
-            user:{
-                id:user.id,
-                name:user.name,
-                email:user.email
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
             }
         });
-    }catch(error){
-        console.error("login error",error);
+
+    } catch (error) {
+        console.error("Login error:", error);
 
         return res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "Internal server error"
         });
     }
 };
-
 
 module.exports = {
     registerUser,

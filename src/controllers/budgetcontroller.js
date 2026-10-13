@@ -1,5 +1,4 @@
 
-
 const mongoose = require("mongoose");
 const Budget = require("../models/budget.model");
 const Transaction = require("../models/transaction.model");
@@ -88,7 +87,7 @@ const createBudget = async (req, res) => {
             });
         }
 
-        const cleanCategory = category.trim();
+        const cleanCategory = category.trim().toLowerCase();
 
         const existingBudget = await Budget.findOne({
             userId,
@@ -118,7 +117,6 @@ const createBudget = async (req, res) => {
             budget
         });
     } catch (error) {
-        // Handle duplicate-key errors from a unique MongoDB index
         if (error.code === 11000) {
             return res.status(409).json({
                 success: false,
@@ -205,18 +203,43 @@ const getBudgetStatus = async (req, res) => {
             }
         });
 
+        // Normalize transaction categories for consistent matching
         const spending = {};
 
         transactions.forEach((transaction) => {
-            const category = transaction.category;
+            const category = transaction.category
+                .trim()
+                .toLowerCase();
 
             spending[category] =
                 (spending[category] || 0) + transaction.amount;
         });
 
         const result = budgets.map((budget) => {
-            const spent = spending[budget.category] || 0;
+            const category = budget.category.trim().toLowerCase();
+            const spent = spending[category] || 0;
             const remaining = budget.amount - spent;
+
+            const usagePercentage = Number(
+                ((spent / budget.amount) * 100).toFixed(2)
+            );
+
+            let alert = {
+                level: "normal",
+                message: "Spending is within your budget."
+            };
+
+            if (spent > budget.amount) {
+                alert = {
+                    level: "exceeded",
+                    message: "You have exceeded your budget."
+                };
+            } else if (usagePercentage >= 80) {
+                alert = {
+                    level: "warning",
+                    message: "You have used at least 80% of your budget."
+                };
+            }
 
             return {
                 category: budget.category,
@@ -224,9 +247,8 @@ const getBudgetStatus = async (req, res) => {
                 spent,
                 remaining,
                 exceeded: spent > budget.amount,
-                usagePercentage: Number(
-                    ((spent / budget.amount) * 100).toFixed(2)
-                )
+                usagePercentage,
+                alert
             };
         });
 
@@ -267,7 +289,7 @@ const updateBudget = async (req, res) => {
             });
         }
 
-        // Restrict lookup to the authenticated user
+        // Find only a budget belonging to the authenticated user
         const budget = await Budget.findOne({
             _id: id,
             userId
@@ -280,7 +302,7 @@ const updateBudget = async (req, res) => {
             });
         }
 
-        let cleanCategory = budget.category;
+        let cleanCategory = budget.category.trim().toLowerCase();
 
         if (category !== undefined) {
             if (
@@ -293,7 +315,7 @@ const updateBudget = async (req, res) => {
                 });
             }
 
-            cleanCategory = category.trim();
+            cleanCategory = category.trim().toLowerCase();
         }
 
         let amountNumber = budget.amount;

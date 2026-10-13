@@ -1,11 +1,14 @@
 const express = require("express");
 
+
 const {
     getSummary,
     getMonthlySummary,
     getYearlySummary,
-    getCategorySummary
+    getCategorySummary,
+    getSpendingInsights
 } = require("../controllers/summarycontroller");
+
 
 const authMiddleware = require("../middlewares/authmiddleware");
 
@@ -110,5 +113,35 @@ router.get("/yearly", authMiddleware, getYearlySummary);
  *         description: Unauthorized
  */
 router.get("/category", authMiddleware, getCategorySummary);
+
+/**
+ * @swagger
+ * /api/summary/insights:
+ *   get:
+ *     summary: Compare spending by category with the previous month
+ *     tags: [Summary]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Spending insights retrieved successfully
+ *       400:
+ *         description: Invalid month or year
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/insights", authMiddleware, getSpendingInsights);
+
 
 module.exports = router;

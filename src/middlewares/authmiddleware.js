@@ -1,40 +1,75 @@
-const jwt= require("jsonwebtoken");
-const authMiddleware= (req,res,next)=>{
-    try{
-        const authHeader=req.headers.authorization;
 
-        if(!authHeader){
-            return res.status (401).json({
-                success:false,
-                message:"authorization token is required"
-            });
-        }
+const jwt = require("jsonwebtoken");
 
-        if(!authHeader.startsWith("Bearer ")){
+const authMiddleware = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        // Check whether the token exists
+        if (!authHeader) {
             return res.status(401).json({
-                success:false,
-                message:"invalid authorization format"
+                success: false,
+                message: "Authorization token is required"
             });
         }
-        const token =authHeader.split(" ")[1];
 
+        // Validate Bearer token format
+        const parts = authHeader.split(" ");
 
-        const decoded=jwt.verify(
+        if (
+            parts.length !== 2 ||
+            parts[0] !== "Bearer" ||
+            !parts[1]
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid authorization format"
+            });
+        }
+
+        const token = parts[1];
+
+        // Ensure JWT secret is configured
+        if (!process.env.JWT_SECRET) {
+            console.error("JWT_SECRET is not configured");
+
+            return res.status(500).json({
+                success: false,
+                message: "Authentication service is not configured"
+            });
+        }
+
+        // Verify the token signature and expiration
+        const decoded = jwt.verify(
             token,
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET,
+            { algorithms: ["HS256"] }
         );
 
-        req.user=decoded;
+        // Ensure the token contains a user ID
+        if (!decoded || !decoded.userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token payload"
+            });
+        }
 
-        next();
-    } catch(error){
-        console.error("auth middleware error:",error.message);
+        req.user = decoded;
+
+        return next();
+
+    } catch (error) {
+        if (error.name !== "TokenExpiredError" &&
+            error.name !== "JsonWebTokenError" &&
+            error.name !== "NotBeforeError") {
+            console.error("Auth middleware error:", error.message);
+        }
 
         return res.status(401).json({
-            success:false,
-            message:"invalid or expired token"
+            success: false,
+            message: "Invalid or expired token"
         });
     }
 };
 
-module.exports=authMiddleware;
+module.exports = authMiddleware;
